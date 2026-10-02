@@ -139,7 +139,7 @@ dialog h2{margin:0 0 14px;font-size:18px}
         <select id="f_ec"><option value="">未標記</option><option value="已下架">已下架</option><option value="上架中">上架中</option></select></label>
       <label class="full">品項<input id="f_name" required autocomplete="off"></label>
       <label class="full">品牌分類
-        <select id="f_brand"><option value="">自動判斷（依品項名稱）</option><option value="Miffy">Miffy 米飛</option><option value="Moomin">Moomin 姆明</option><option value="Brunch Brother">Brunch Brother 早午餐兄弟</option><option value="Chiikawa">Chiikawa 吉伊卡哇</option><option value="Snoopy">SNOOPY 史努比</option><option value="Pingu">Pingu</option><option value="三麗鷗">三麗鷗</option><option value="其他">其他</option></select></label>
+        <select id="f_brand"><option value="">自動判斷（依品項名稱）</option><option value="Miffy">Miffy 米飛</option><option value="Moomin">Moomin 姆明</option><option value="Brunch Brother">Brunch Brother 早午餐兄弟</option><option value="Chiikawa">Chiikawa 吉伊卡哇</option><option value="Snoopy">SNOOPY 史努比</option><option value="Pingu">Pingu</option><option value="三麗鷗">三麗鷗</option><option value="小丸子">小丸子</option><option value="其他">其他</option></select></label>
       <label>紀錄日期<input id="f_date" placeholder="例如 2026/10/02" autocomplete="off"></label>
       <label>預計補貨日<input id="f_eta" placeholder="例如 11月中" autocomplete="off"></label>
       <label class="full">備註<input id="f_note" autocomplete="off"></label>
@@ -169,8 +169,8 @@ let tab='all', editing=null, delArmed=false;
 try{const t=location.hash.slice(1);if(t==='all'||CATS[t])tab=t}catch(e){}
 
 function items(cat){return all.filter(i=>cat==='all'||i.cat===cat).sort((a,b)=>(a.order||0)-(b.order||0))}
-const BRANDS=['Miffy','Moomin','Brunch Brother','Chiikawa','Snoopy','Pingu','三麗鷗','其他'];
-const BRAND_LABEL={'Miffy':'Miffy 米飛','Moomin':'Moomin 姆明','Brunch Brother':'Brunch Brother 早午餐兄弟','Chiikawa':'Chiikawa 吉伊卡哇','Snoopy':'SNOOPY 史努比','Pingu':'Pingu','三麗鷗':'三麗鷗','其他':'其他'};
+const BRANDS=['Miffy','Moomin','Brunch Brother','Chiikawa','Snoopy','Pingu','三麗鷗','小丸子','其他'];
+const BRAND_LABEL={'Miffy':'Miffy 米飛','Moomin':'Moomin 姆明','Brunch Brother':'Brunch Brother 早午餐兄弟','Chiikawa':'Chiikawa 吉伊卡哇','Snoopy':'SNOOPY 史努比','Pingu':'Pingu','三麗鷗':'三麗鷗','小丸子':'小丸子','其他':'其他'};
 function guessBrand(n){n=n||'';const u=n.toUpperCase();
   if(u.includes('MIFFY')||n.includes('米飛'))return'Miffy';
   if(u.includes('MOOMIN')||n.includes('姆明'))return'Moomin';
@@ -179,6 +179,7 @@ function guessBrand(n){n=n||'';const u=n.toUpperCase();
   if(u.includes('SNOOPY')||n.includes('史努比'))return'Snoopy';
   if(u.includes('PINGU'))return'Pingu';
   if(u.includes('SANRIO')||n.includes('三麗鷗'))return'三麗鷗';
+  if(n.includes('小丸子'))return'小丸子';
   return'其他'}
 const brandOf=i=>BRANDS.includes(i.brand)?i.brand:guessBrand(i.name);
 

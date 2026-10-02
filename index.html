@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>商品供貨狀態清單</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html{color-scheme:light dark}body{margin:0}[hidden]{display:none!important}
+/* Layout: one working column — sticky toolbar (status tabs + search) over a dense ledger of rows; each row leads with the 料號 in mono, like a stock card. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#18222d; --muted:#5d6b79; --line:#dbe1e7; --hover:#eef2f6;
+  --accent:#0f5f6e; --accent-ink:#ffffff;
+  --sold:#b3372f; --sold-bg:#fbe9e6;
+  --restock:#96620a; --restock-bg:#fbf0d6;
+  --hold:#4b4f9a; --hold-bg:#e9eafa;
+  --ok:#2c6e49; --ok-bg:#e2f2e8;
+  --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#12171c; --surface:#1a2129; --ink:#e6ecf2; --muted:#93a1af; --line:#2c3642; --hover:#222b35;
+  --accent:#5fc3d4; --accent-ink:#0b1a1e;
+  --sold:#f08a80; --sold-bg:#3a1e1c;
+  --restock:#e8b85a; --restock-bg:#372b12;
+  --hold:#a9adf2; --hold-bg:#25264a;
+  --ok:#7fcb9e; --ok-bg:#183124; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#12171c; --surface:#1a2129; --ink:#e6ecf2; --muted:#93a1af; --line:#2c3642; --hover:#222b35;
+  --accent:#5fc3d4; --accent-ink:#0b1a1e;
+  --sold:#f08a80; --sold-bg:#3a1e1c;
+  --restock:#e8b85a; --restock-bg:#372b12;
+  --hold:#a9adf2; --hold-bg:#25264a;
+  --ok:#7fcb9e; --ok-bg:#183124; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5}
+.wrap{max-width:980px;margin:0 auto;padding-inline:16px;padding-block:24px 64px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 16px}
+h1{font-size:24px;font-weight:700;margin:0;letter-spacing:.02em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;display:flex;flex-direction:column;gap:10px}
+.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tab{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tab .n{font-family:var(--mono);font-size:22px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
+.tab .l{font-size:13px;font-weight:500}
+.tab .s{font-size:11px;color:var(--muted)}
+.tab[data-cat="sold"] .n{color:var(--sold)} .tab[data-cat="restock"] .n{color:var(--restock)} .tab[data-cat="hold"] .n{color:var(--hold)}
+.tab[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 -3px 0 var(--ink)}
+.tab[data-cat="sold"][aria-pressed="true"]{border-color:var(--sold);box-shadow:inset 0 -3px 0 var(--sold)}
+.tab[data-cat="restock"][aria-pressed="true"]{border-color:var(--restock);box-shadow:inset 0 -3px 0 var(--restock)}
+.tab[data-cat="hold"][aria-pressed="true"]{border-color:var(--hold);box-shadow:inset 0 -3px 0 var(--hold)}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+.tools input,.tools select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-width:0}
+.tools input{flex:1 1 220px}
+.tools select{flex:0 1 190px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 16px;font-weight:500}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--sold);border:1px solid var(--sold)}
+
+.list{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:168px minmax(0,1fr) auto auto;gap:4px 14px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row:hover{background:var(--hover)}
+.code{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;background:none;border:0;padding:0;text-align:left;color:var(--ink);overflow-wrap:anywhere}
+.code.none{color:var(--muted);cursor:default;font-family:var(--font)}
+.name{min-width:0;overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted);margin-top:2px}
+.meta .brand{color:var(--accent);font-weight:500}
+.pills{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.pill{font-size:12px;font-weight:500;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.sold{background:var(--sold-bg);color:var(--sold)} .pill.restock{background:var(--restock-bg);color:var(--restock)} .pill.hold{background:var(--hold-bg);color:var(--hold)}
+.pill.off{background:var(--line);color:var(--ink)} .pill.on{background:var(--ok-bg);color:var(--ok)}
+.edit{background:none;border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;color:var(--muted)}
+.edit:hover{color:var(--ink);border-color:var(--ink)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.count{font-size:13px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
+
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:20px;width:min(520px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(10,15,20,.5)}
+dialog h2{margin:0 0 14px;font-size:18px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.form label.full{grid-column:1/-1}
+.form input,.form select,.form textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:15px;color:var(--ink);width:100%}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:18px}
+.actions .right{display:flex;gap:8px;margin-left:auto}
+.err{color:var(--sold);font-size:13px;margin-top:10px}
+
+@media (max-width:640px){
+  .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row{grid-template-columns:minmax(0,1fr) auto}
+  .row .code{grid-column:1/-1}
+  .row .pills{grid-column:1;justify-content:flex-start}
+  .form{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>商品供貨狀態清單</h1>
+      <p class="sub">售完不補、暫時缺貨、改版暫不生產的商品，一頁查清楚。點料號可複製。</p>
+    </div>
+    <button class="btn" id="addBtn">＋ 新增商品</button>
+  </header>
+
+  <div class="bar">
+    <div class="tabs" id="tabs"></div>
+    <div class="tools">
+      <input id="q" type="search" placeholder="搜尋料號或品項，例如 KLMF、飲料袋" autocomplete="off">
+      <select id="brand" aria-label="品牌"><option value="">全部品牌</option></select>
+      <select id="ecf" aria-label="電商狀態">
+        <option value="">全部電商狀態</option><option value="已下架">已下架</option><option value="上架中">上架中</option><option value="-">未標記</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="count" id="count"></div>
+  <div class="list" id="list"><div class="empty">正在載入雲端清單…</div></div>
+</div>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <h2 id="dlgTitle">新增商品</h2>
+    <div class="form">
+      <label class="full">狀態分類
+        <select id="f_cat">
+          <option value="sold">售完不補</option><option value="restock">未來會補貨（暫時缺貨）</option><option value="hold">改版／暫不生產</option>
+        </select></label>
+      <label>料號<input id="f_code" autocomplete="off"></label>
+      <label>電商狀態
+        <select id="f_ec"><option value="">未標記</option><option value="已下架">已下架</option><option value="上架中">上架中</option></select></label>
+      <label class="full">品項<input id="f_name" required autocomplete="off"></label>
+      <label class="full">品牌分類
+        <select id="f_brand"><option value="">自動判斷（依品項名稱）</option><option value="Miffy">Miffy 米飛</option><option value="Moomin">Moomin 姆明</option><option value="Brunch Brother">Brunch Brother 早午餐兄弟</option><option value="Chiikawa">Chiikawa 吉伊卡哇</option><option value="Snoopy">SNOOPY 史努比</option><option value="Pingu">Pingu</option><option value="三麗鷗">三麗鷗</option><option value="其他">其他</option></select></label>
+      <label>紀錄日期<input id="f_date" placeholder="例如 2026/10/02" autocomplete="off"></label>
+      <label>預計補貨日<input id="f_eta" placeholder="例如 11月中" autocomplete="off"></label>
+      <label class="full">備註<input id="f_note" autocomplete="off"></label>
+    </div>
+    <div class="err" id="err" hidden></div>
+    <div class="actions">
+      <button type="button" class="btn danger" id="delBtn" hidden>從清單移除</button>
+      <div class="right">
+        <button type="button" class="btn ghost" id="cancelBtn">取消</button>
+        <button type="submit" class="btn" id="saveBtn">儲存</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" hidden></div>
+<script>
+const API='https://script.google.com/macros/s/AKfycbyeA7qB6HvRBPVLCczEvisfu5YTzY-925WOk9Rdgmfs1FtS7zbC2KdA4s9xeWcvq9JQ/exec';
+const CATS={
+  sold:{label:'售完不補',sub:'賣完即止'},
+  restock:{label:'未來會補貨',sub:'暫時缺貨'},
+  hold:{label:'改版／暫不生產',sub:'等待改版或排程'}
+};
+const $=id=>document.getElementById(id);
+const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+let all=[], loaded=false, failed='';
+let tab='all', editing=null, delArmed=false;
+try{const t=location.hash.slice(1);if(t==='all'||CATS[t])tab=t}catch(e){}
+
+function items(cat){return all.filter(i=>cat==='all'||i.cat===cat).sort((a,b)=>(a.order||0)-(b.order||0))}
+const BRANDS=['Miffy','Moomin','Brunch Brother','Chiikawa','Snoopy','Pingu','三麗鷗','其他'];
+const BRAND_LABEL={'Miffy':'Miffy 米飛','Moomin':'Moomin 姆明','Brunch Brother':'Brunch Brother 早午餐兄弟','Chiikawa':'Chiikawa 吉伊卡哇','Snoopy':'SNOOPY 史努比','Pingu':'Pingu','三麗鷗':'三麗鷗','其他':'其他'};
+function guessBrand(n){n=n||'';const u=n.toUpperCase();
+  if(u.includes('MIFFY')||n.includes('米飛'))return'Miffy';
+  if(u.includes('MOOMIN')||n.includes('姆明'))return'Moomin';
+  if(u.includes('BRUNCH')||n.includes('早午餐'))return'Brunch Brother';
+  if(u.includes('CHIIKAWA')||n.includes('吉伊卡哇'))return'Chiikawa';
+  if(u.includes('SNOOPY')||n.includes('史努比'))return'Snoopy';
+  if(u.includes('PINGU'))return'Pingu';
+  if(u.includes('SANRIO')||n.includes('三麗鷗'))return'三麗鷗';
+  return'其他'}
+const brandOf=i=>BRANDS.includes(i.brand)?i.brand:guessBrand(i.name);
+
+function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2200)}
+
+function renderTabs(){
+  const box=$('tabs');box.textContent='';
+  const mk=(key,label,sub,n)=>{
+    const b=el('button','tab');b.type='button';b.dataset.cat=key;b.setAttribute('aria-pressed',String(tab===key));
+    b.append(el('span','n',loaded?String(n):'–'),el('span','l',label),el('span','s',sub));
+    b.onclick=()=>{tab=key;try{history.replaceState(null,'','#'+key)}catch(e){}renderBrands();render()};
+    box.append(b);
+  };
+  mk('all','全部','三種狀態合計',items('all').length);
+  for(const k in CATS)mk(k,CATS[k].label,CATS[k].sub,items(k).length);
+}
+
+function renderBrands(){
+  const sel=$('brand'),cur=sel.value,n={};
+  items(tab).forEach(i=>{const b=brandOf(i);n[b]=(n[b]||0)+1});
+  sel.textContent='';sel.append(new Option('全部品牌',''));
+  BRANDS.forEach(b=>sel.append(new Option(BRAND_LABEL[b]+'（'+(n[b]||0)+'）',b)));
+  sel.value=cur;
+}
+
+function render(){
+  renderTabs();
+  const list=$('list');list.textContent='';
+  if(!loaded){list.append(el('div','empty',failed||'正在載入清單…'));$('count').textContent='';return}
+  const q=$('q').value.trim().toLowerCase(),brand=$('brand').value,ecf=$('ecf').value;
+  const rows=items(tab).filter(i=>{
+    if(brand&&brandOf(i)!==brand)return false;
+    if(ecf&&(ecf==='-'?!!i.ec:i.ec!==ecf))return false;
+    if(q&&!((i.code||'')+' '+(i.name||'')+' '+(i.note||'')).toLowerCase().includes(q))return false;
+    return true;
+  });
+  $('count').textContent='顯示 '+rows.length+' 筆'+(tab==='all'?'':'｜'+CATS[tab].label);
+  if(!rows.length){
+    list.append(el('div','empty',items(tab).length?'沒有符合條件的商品，換個關鍵字試試。':'這個分類目前沒有商品。按右上角「新增商品」加入第一筆。'));
+    return;
+  }
+  const frag=document.createDocumentFragment();
+  for(const i of rows){
+    const r=el('div','row');
+    const c=el('button','code'+(i.code?'':' none'),i.code||'（無料號）');c.type='button';
+    if(i.code){c.title='點一下複製料號';c.onclick=()=>copy(i.code)}else c.disabled=true;
+    const n=el('div','name');n.append(el('div',null,i.name));
+    const meta=el('div','meta');
+    meta.append(el('span','brand',BRAND_LABEL[brandOf(i)]));
+    if(i.date)meta.append(el('span',null,'紀錄 '+i.date));
+    if(i.cat==='restock')meta.append(el('span',null,'預計補貨 '+(i.eta||'未定')));
+    if(i.note)meta.append(el('span',null,'備註：'+i.note));
+    n.append(meta);
+    const p=el('div','pills');
+    if(tab==='all')p.append(el('span','pill '+i.cat,CATS[i.cat].label));
+    if(i.ec)p.append(el('span','pill '+(i.ec==='已下架'?'off':'on'),i.ec));
+    const e=el('button','edit','編輯');e.type='button';e.onclick=()=>openForm(i);
+    r.append(c,n,p,e);
+    frag.append(r);
+  }
+  list.append(frag);
+}
+
+function copy(text){
+  const done=()=>toast('已複製 '+text);
+  try{navigator.clipboard.writeText(text).then(done,()=>toast('無法複製，請手動選取：'+text))}catch(e){toast('無法複製，請手動選取：'+text)}
+}
+
+function openForm(it){
+  editing=it||null;delArmed=false;
+  $('dlgTitle').textContent=it?'編輯商品':'新增商品';
+  $('f_cat').value=it?it.cat:(tab==='all'?'sold':tab);
+  $('f_code').value=it?it.code||'':'';$('f_name').value=it?it.name||'':'';
+  $('f_ec').value=it?it.ec||'':'';$('f_brand').value=it?brandOf(it):'';$('f_date').value=it?it.date||'':'';
+  $('f_eta').value=it?it.eta||'':'';$('f_note').value=it?it.note||'':'';
+  $('delBtn').hidden=!it;$('delBtn').textContent='從清單移除';$('err').hidden=true;
+  $('dlg').showModal();
+}
+function showErr(msg){$('err').textContent=msg;$('err').hidden=false}
+
+async function api(body){
+  const r=await fetch(API,body?{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)}:{});
+  const j=await r.json();
+  if(!j.ok)throw new Error(j.error||'error');
+  return j;
+}
+function apply(j){
+  all=(j.items||[]).map(i=>({...i,order:Number(i.order)||0}));
+  loaded=true;failed='';
+  try{localStorage.setItem('stock-list-cache',JSON.stringify(all))}catch(e){}
+  renderBrands();render();
+}
+async function load(){
+  try{apply(await api())}
+  catch(e){if(!loaded){failed='清單載入失敗，請檢查網路後重新整理頁面。';render()}}
+}
+function setBusy(b){$('saveBtn').disabled=b;$('delBtn').disabled=b;$('saveBtn').textContent=b?'儲存中…':'儲存'}
+
+async function save(){
+  const cat=$('f_cat').value,name=$('f_name').value.trim();
+  if(!name){showErr('請填寫品項名稱。');return}
+  const item={id:editing?editing.id:'',cat,code:$('f_code').value.trim(),name,brand:$('f_brand').value||guessBrand(name),ec:$('f_ec').value,
+    date:$('f_date').value.trim(),eta:$('f_eta').value.trim(),note:$('f_note').value.trim(),order:editing?editing.order||0:-Date.now()};
+  setBusy(true);
+  try{
+    apply(await api({action:'save',item}));
+    $('dlg').close();toast(editing?'已更新':'已新增到「'+CATS[cat].label+'」');
+  }catch(e){showErr('儲存失敗，請稍後再試一次。')}
+  setBusy(false);
+}
+async function remove(){
+  if(!delArmed){delArmed=true;$('delBtn').textContent='再按一次確認移除';return}
+  setBusy(true);
+  try{apply(await api({action:'remove',id:editing.id}));$('dlg').close();toast('已從清單移除')}
+  catch(e){showErr('移除失敗，請稍後再試一次。')}
+  setBusy(false);
+}
+
+$('form').addEventListener('submit',e=>{e.preventDefault();save()});
+$('cancelBtn').onclick=()=>$('dlg').close();
+$('delBtn').onclick=remove;
+$('addBtn').onclick=()=>openForm(null);
+['q','brand','ecf'].forEach(id=>$(id).addEventListener('input',render));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('dlg').open)load()});
+
+try{const c=JSON.parse(localStorage.getItem('stock-list-cache')||'null');if(Array.isArray(c)&&c.length){all=c;loaded=true}}catch(e){}
+renderBrands();render();load();
+</script>
+</body>
+</html>

@@ -92,7 +92,26 @@ dialog h2{margin:0 0 14px;font-size:18px}
 .actions .right{display:flex;gap:8px;margin-left:auto}
 .err{color:var(--sold);font-size:13px;margin-top:10px}
 
+.views{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.view{background:none;border:0;border-bottom:3px solid transparent;padding:8px 14px;font-weight:500;color:var(--muted);margin-bottom:-1px}
+.view[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:999px;background:var(--sold);color:var(--surface);font-size:12px;font-family:var(--mono);text-align:center}
+section{display:flex;flex-direction:column;gap:16px}
+.rform{display:grid;grid-template-columns:150px minmax(0,1fr) 110px minmax(0,1fr) auto;gap:8px}
+.rform input,.bulk textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-width:0;width:100%}
+.bulk summary{cursor:pointer;color:var(--muted);font-size:13px}
+.bulk textarea{display:block;margin-block:8px;font-family:var(--mono);font-size:13px}
+.row.rrow{grid-template-columns:168px minmax(0,1fr) auto}
+.acts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}
+.act{background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;font-weight:500}
+.act.done{color:var(--ok);border-color:var(--ok)} .act.restock{color:var(--restock);border-color:var(--restock)} .act.sold{color:var(--sold);border-color:var(--sold)} .act.delist{color:var(--ink);border-color:var(--ink)}
+.act:hover{background:var(--hover)} .act:disabled,.edit:disabled{opacity:.5;cursor:default}
+.pill.done{background:var(--ok-bg);color:var(--ok)} .pill.delist{background:var(--line);color:var(--ink)}
+
 @media (max-width:640px){
+  .rform{grid-template-columns:1fr 1fr}
+  .row.rrow{grid-template-columns:minmax(0,1fr)}
+  .row.rrow .acts{justify-content:flex-start}
   .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
   .row{grid-template-columns:minmax(0,1fr) auto}
   .row .code{grid-column:1/-1}
@@ -106,11 +125,17 @@ dialog h2{margin:0 0 14px;font-size:18px}
   <header>
     <div>
       <h1>商品供貨狀態清單</h1>
-      <p class="sub">售完不補、暫時缺貨、改版暫不生產的商品，一頁查清楚。點料號可複製。</p>
+      <p class="sub">售完不補、暫時缺貨、改版暫不生產的商品，以及每天的低庫存回報。點料號可複製。</p>
     </div>
     <button class="btn" id="addBtn">＋ 新增商品</button>
   </header>
 
+  <nav class="views">
+    <button type="button" class="view" id="vbList">供貨狀態清單</button>
+    <button type="button" class="view" id="vbRep">每日低庫存回報<span class="badge" id="pend" hidden></span></button>
+  </nav>
+
+  <section id="vList">
   <div class="bar">
     <div class="tabs" id="tabs"></div>
     <div class="tools">
@@ -124,6 +149,30 @@ dialog h2{margin:0 0 14px;font-size:18px}
 
   <div class="count" id="count"></div>
   <div class="list" id="list"><div class="empty">正在載入雲端清單…</div></div>
+  </section>
+
+  <section id="vRep" hidden>
+    <form id="rForm" class="rform">
+      <input id="r_code" placeholder="料號" aria-label="料號" autocomplete="off">
+      <input id="r_name" placeholder="品項" aria-label="品項" autocomplete="off">
+      <input id="r_qty" placeholder="剩餘數量" aria-label="剩餘數量" autocomplete="off">
+      <input id="r_note" placeholder="備註，例如：建議下架" aria-label="備註" autocomplete="off">
+      <button type="submit" class="btn">加入回報</button>
+    </form>
+    <details class="bulk">
+      <summary>一次貼上多筆（可直接從 Excel 貼上）</summary>
+      <textarea id="r_bulk" rows="5" aria-label="多筆回報" placeholder="每行一筆，欄位依序是：料號、品項、剩餘數量、備註&#10;例如：KLMF144, 【MIFFY】台味米飛飲料袋, 3"></textarea>
+      <button type="button" class="btn" id="r_bulkBtn">全部加入</button>
+    </details>
+    <div class="tools">
+      <input id="r_q" type="search" placeholder="搜尋料號、品項或日期，例如 2026/10/02" autocomplete="off">
+      <select id="r_filter" aria-label="處理狀態">
+        <option value="pending">待處理</option><option value="resolved">已處理</option><option value="all">全部</option>
+      </select>
+    </div>
+    <div class="count" id="r_count"></div>
+    <div class="list" id="r_list"><div class="empty">正在載入回報…</div></div>
+  </section>
 </div>
 
 <dialog id="dlg">
@@ -164,9 +213,9 @@ const CATS={
 };
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
-let all=[], loaded=false, failed='';
+let all=[], reports=[], view='list', loaded=false, failed='';
 let tab='all', editing=null, delArmed=false;
-try{const t=location.hash.slice(1);if(t==='all'||CATS[t])tab=t}catch(e){}
+try{const t=location.hash.slice(1);if(t==='all'||CATS[t])tab=t;if(t==='reports')view='reports'}catch(e){}
 
 function items(cat){return all.filter(i=>cat==='all'||i.cat===cat).sort((a,b)=>(a.order||0)-(b.order||0))}
 const BRANDS=['Miffy','Moomin','Brunch Brother','Chiikawa','Snoopy','Pingu','三麗鷗','小丸子','其他'];
@@ -268,13 +317,14 @@ async function api(body){
 }
 function apply(j){
   all=(j.items||[]).map(i=>({...i,order:Number(i.order)||0}));
+  if(Array.isArray(j.reports))reports=j.reports;
   loaded=true;failed='';
   try{localStorage.setItem('stock-list-cache',JSON.stringify(all))}catch(e){}
-  renderBrands();render();
+  renderBrands();render();renderReports();
 }
 async function load(){
   try{apply(await api())}
-  catch(e){if(!loaded){failed='清單載入失敗，請檢查網路後重新整理頁面。';render()}}
+  catch(e){if(!loaded){failed='清單載入失敗，請檢查網路後重新整理頁面。';render();renderReports()}}
 }
 function setBusy(b){$('saveBtn').disabled=b;$('delBtn').disabled=b;$('saveBtn').textContent=b?'儲存中…':'儲存'}
 
@@ -298,6 +348,91 @@ async function remove(){
   setBusy(false);
 }
 
+const RESULTS={done:'已補貨',restock:'未來會補貨',sold:'售完不補',delist:'售完下架'};
+let rBusy=false, rEdit='', rDel='';
+function setView(v){view=v;try{history.replaceState(null,'','#'+(v==='reports'?'reports':tab))}catch(e){}renderView()}
+function renderView(){
+  $('vList').hidden=view!=='list';$('vRep').hidden=view!=='reports';$('addBtn').hidden=view!=='list';
+  $('vbList').setAttribute('aria-pressed',String(view==='list'));$('vbRep').setAttribute('aria-pressed',String(view==='reports'));
+}
+function renderReports(){
+  const pend=reports.filter(r=>!r.result).length;
+  $('pend').textContent=String(pend);$('pend').hidden=!pend;
+  const box=$('r_list');box.textContent='';
+  if(!loaded){box.append(el('div','empty',failed||'正在載入回報…'));$('r_count').textContent='';return}
+  const f=$('r_filter').value,q=$('r_q').value.trim().toLowerCase();
+  const rows=reports.filter(r=>{
+    if(f==='pending'&&r.result)return false;
+    if(f==='resolved'&&!r.result)return false;
+    if(q&&!((r.code||'')+' '+(r.name||'')+' '+(r.note||'')+' '+(r.date||'')).toLowerCase().includes(q))return false;
+    return true;
+  }).reverse();
+  $('r_count').textContent='顯示 '+rows.length+' 筆｜待處理 '+pend+' 筆';
+  if(!rows.length){box.append(el('div','empty',f==='pending'&&!q?'目前沒有待處理的低庫存回報。用上方欄位加入今天的回報。':'沒有符合條件的回報。'));return}
+  const frag=document.createDocumentFragment();
+  for(const r of rows){
+    const row=el('div','row rrow');
+    const c=el('button','code'+(r.code?'':' none'),r.code||'（無料號）');c.type='button';
+    if(r.code){c.title='點一下複製料號';c.onclick=()=>copy(r.code)}else c.disabled=true;
+    const n=el('div','name');n.append(el('div',null,r.name||'（未填品項）'));
+    const meta=el('div','meta');
+    meta.append(el('span',null,'回報 '+(r.date||'')));
+    if(r.qty)meta.append(el('span',null,'剩餘 '+r.qty));
+    if(r.note)meta.append(el('span',null,'備註：'+r.note));
+    if(r.result)meta.append(el('span',null,'處理 '+(r.doneDate||'')));
+    n.append(meta);
+    const a=el('div','acts');
+    if(r.result&&rEdit!==r.id){
+      a.append(el('span','pill '+r.result,RESULTS[r.result]));
+      const ch=el('button','edit','變更');ch.type='button';ch.disabled=rBusy;ch.onclick=()=>{rEdit=r.id;renderReports()};a.append(ch);
+    }else{
+      for(const k in RESULTS){const b=el('button','act '+k,RESULTS[k]);b.type='button';b.disabled=rBusy;b.onclick=()=>resolveReport(r,k);a.append(b)}
+    }
+    const d=el('button','edit',rDel===r.id?'確認移除':'移除');d.type='button';d.disabled=rBusy;d.onclick=()=>removeReport(r);a.append(d);
+    row.append(c,n,a);frag.append(row);
+  }
+  box.append(frag);
+}
+async function rCall(body,msg){
+  if(rBusy)return false;
+  rBusy=true;renderReports();let ok=false;
+  try{apply(await api(body));ok=true;toast(msg)}catch(e){toast('處理失敗，請稍後再試一次。')}
+  rBusy=false;renderReports();return ok;
+}
+function resolveReport(r,k){
+  rEdit='';rDel='';
+  const msg={done:'已標記為已補貨',restock:'已列入「未來會補貨」',sold:'已列入「售完不補」',delist:'已列入「售完不補」並標記已下架'}[k];
+  return rCall({action:'resolve',id:r.id,result:k,brand:guessBrand(r.name)},msg);
+}
+function removeReport(r){
+  if(rDel!==r.id){rDel=r.id;renderReports();return}
+  rDel='';return rCall({action:'reportRemove',id:r.id},'已移除這筆回報');
+}
+function fillName(r){if(!r.name&&r.code){const m=all.find(i=>i.code===r.code);if(m)r.name=m.name}return r}
+function parseBulk(text){
+  return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    const p=l.split(/\t|,|，/).map(s=>s.trim());
+    if(p.length===1)return{code:'',name:p[0],qty:'',note:''};
+    return{code:p[0],name:p[1]||'',qty:p[2]||'',note:p.slice(3).filter(Boolean).join(' ')};
+  }).filter(r=>r.code||r.name).map(fillName);
+}
+
+$('vbList').onclick=()=>setView('list');
+$('vbRep').onclick=()=>setView('reports');
+$('rForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const r=fillName({code:$('r_code').value.trim(),name:$('r_name').value.trim(),qty:$('r_qty').value.trim(),note:$('r_note').value.trim()});
+  if(!r.code&&!r.name){toast('請至少填料號或品項。');return}
+  if(await rCall({action:'report',reports:[r]},'已加入回報')){['r_code','r_name','r_qty','r_note'].forEach(id=>$(id).value='');$('r_code').focus()}
+});
+$('r_code').addEventListener('change',()=>{const m=all.find(i=>i.code===$('r_code').value.trim());if(m&&!$('r_name').value)$('r_name').value=m.name});
+$('r_bulkBtn').onclick=async()=>{
+  const rs=parseBulk($('r_bulk').value);
+  if(!rs.length){toast('請先貼上回報內容。');return}
+  if(await rCall({action:'report',reports:rs},'已加入 '+rs.length+' 筆回報'))$('r_bulk').value='';
+};
+['r_filter','r_q'].forEach(id=>$(id).addEventListener('input',renderReports));
+
 $('form').addEventListener('submit',e=>{e.preventDefault();save()});
 $('cancelBtn').onclick=()=>$('dlg').close();
 $('delBtn').onclick=remove;
@@ -306,7 +441,7 @@ $('addBtn').onclick=()=>openForm(null);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('dlg').open)load()});
 
 try{const c=JSON.parse(localStorage.getItem('stock-list-cache')||'null');if(Array.isArray(c)&&c.length){all=c;loaded=true}}catch(e){}
-renderBrands();render();load();
+renderView();renderBrands();render();renderReports();load();
 </script>
 </body>
 </html>

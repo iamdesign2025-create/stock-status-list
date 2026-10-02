@@ -108,6 +108,8 @@ section{display:flex;flex-direction:column;gap:16px}
 .act:hover{background:var(--hover)} .act:disabled,.edit:disabled{opacity:.5;cursor:default}
 .pill.done{background:var(--ok-bg);color:var(--ok)} .pill.delist{background:var(--line);color:var(--ink)}
 
+.tools input[type="date"]{flex:0 1 170px}
+
 @media (max-width:640px){
   .rform{grid-template-columns:1fr 1fr}
   .row.rrow{grid-template-columns:minmax(0,1fr)}
@@ -165,7 +167,9 @@ section{display:flex;flex-direction:column;gap:16px}
       <button type="button" class="btn" id="r_bulkBtn">全部加入</button>
     </details>
     <div class="tools">
-      <input id="r_q" type="search" placeholder="搜尋料號、品項或日期，例如 2026/10/02" autocomplete="off">
+      <input id="r_q" type="search" placeholder="用料號或品項查找，例如 KLMF144" aria-label="用料號或品項查找" autocomplete="off">
+      <input id="r_date" type="date" aria-label="用日期查找" title="用日期查找（回報日或處理日）">
+      <button type="button" class="btn ghost" id="r_dateClr" hidden>清除日期</button>
       <select id="r_filter" aria-label="處理狀態">
         <option value="pending">待處理</option><option value="resolved">已處理</option><option value="all">全部</option>
       </select>
@@ -360,15 +364,17 @@ function renderReports(){
   $('pend').textContent=String(pend);$('pend').hidden=!pend;
   const box=$('r_list');box.textContent='';
   if(!loaded){box.append(el('div','empty',failed||'正在載入回報…'));$('r_count').textContent='';return}
-  const f=$('r_filter').value,q=$('r_q').value.trim().toLowerCase();
+  const f=$('r_filter').value,q=$('r_q').value.trim().toLowerCase(),d=$('r_date').value.replace(/-/g,'/');
+  $('r_dateClr').hidden=!d;
   const rows=reports.filter(r=>{
+    if(d&&r.date!==d&&r.doneDate!==d)return false;
     if(f==='pending'&&r.result)return false;
     if(f==='resolved'&&!r.result)return false;
     if(q&&!((r.code||'')+' '+(r.name||'')+' '+(r.note||'')+' '+(r.date||'')).toLowerCase().includes(q))return false;
     return true;
   }).reverse();
-  $('r_count').textContent='顯示 '+rows.length+' 筆｜待處理 '+pend+' 筆';
-  if(!rows.length){box.append(el('div','empty',f==='pending'&&!q?'目前沒有待處理的低庫存回報。用上方欄位加入今天的回報。':'沒有符合條件的回報。'));return}
+  $('r_count').textContent=(d?d+'｜':'')+'顯示 '+rows.length+' 筆｜待處理 '+pend+' 筆';
+  if(!rows.length){box.append(el('div','empty',f==='pending'&&!q&&!d?'目前沒有待處理的低庫存回報。用上方欄位加入今天的回報。':'沒有符合條件的回報。'));return}
   const frag=document.createDocumentFragment();
   for(const r of rows){
     const row=el('div','row rrow');
@@ -431,7 +437,9 @@ $('r_bulkBtn').onclick=async()=>{
   if(!rs.length){toast('請先貼上回報內容。');return}
   if(await rCall({action:'report',reports:rs},'已加入 '+rs.length+' 筆回報'))$('r_bulk').value='';
 };
-['r_filter','r_q'].forEach(id=>$(id).addEventListener('input',renderReports));
+$('r_filter').addEventListener('input',renderReports);
+['r_q','r_date'].forEach(id=>$(id).addEventListener('input',()=>{if($(id).value&&$('r_filter').value==='pending')$('r_filter').value='all';renderReports()}));
+$('r_dateClr').onclick=()=>{$('r_date').value='';renderReports()};
 
 $('form').addEventListener('submit',e=>{e.preventDefault();save()});
 $('cancelBtn').onclick=()=>$('dlg').close();

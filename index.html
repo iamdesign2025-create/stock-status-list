@@ -407,7 +407,7 @@ async function rCall(body,msg){
 }
 function resolveReport(r,k){
   rEdit='';rDel='';
-  const msg={done:'已標記為已補貨',restock:'已列入「未來會補貨」',sold:'已列入「售完不補」',delist:'已列入「售完不補」並標記已下架'}[k];
+  const msg={done:'已標記為已補貨',restock:'已列入「未來會補貨」',sold:'已列入「售完不補」',delist:'已列入「未來會補貨」並標記已下架'}[k];
   return rCall({action:'resolve',id:r.id,result:k,brand:guessBrand(r.name)},msg);
 }
 function removeReport(r){

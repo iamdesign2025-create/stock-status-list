@@ -207,6 +207,24 @@ section{display:flex;flex-direction:column;gap:16px}
     </div>
   </form>
 </dialog>
+<dialog id="rDlg">
+  <form id="rEditForm" method="dialog">
+    <h2>修改回報</h2>
+    <div class="form">
+      <label>料號<input id="e_code" autocomplete="off"></label>
+      <label>剩餘數量<input id="e_qty" autocomplete="off"></label>
+      <label class="full">品項<input id="e_name" autocomplete="off"></label>
+      <label class="full">備註<input id="e_note" autocomplete="off"></label>
+    </div>
+    <div class="err" id="e_err" hidden></div>
+    <div class="actions">
+      <div class="right">
+        <button type="button" class="btn ghost" id="e_cancel">取消</button>
+        <button type="submit" class="btn" id="e_save">儲存</button>
+      </div>
+    </div>
+  </form>
+</dialog>
 <div class="toast" id="toast" hidden></div>
 <script>
 const API='https://script.google.com/macros/s/AKfycbyeA7qB6HvRBPVLCczEvisfu5YTzY-925WOk9Rdgmfs1FtS7zbC2KdA4s9xeWcvq9JQ/exec';
@@ -395,6 +413,7 @@ function renderReports(){
     }else{
       for(const k in RESULTS){const b=el('button','act '+k,RESULTS[k]);b.type='button';b.disabled=rBusy;b.onclick=()=>resolveReport(r,k);a.append(b)}
     }
+    const ed=el('button','edit','修改');ed.type='button';ed.disabled=rBusy;ed.onclick=()=>openReportEdit(r);a.append(ed);
     const d=el('button','edit',rDel===r.id?'確認移除':'移除');d.type='button';d.disabled=rBusy;d.onclick=()=>removeReport(r);a.append(d);
     row.append(c,n,a);frag.append(row);
   }
@@ -423,6 +442,23 @@ function parseBulk(text){
     return{code:p[0],name:p[1]||'',qty:p[2]||'',note:p.slice(3).filter(Boolean).join(' ')};
   }).filter(r=>r.code||r.name).map(fillName);
 }
+
+let rEditing=null;
+function openReportEdit(r){
+  rEditing=r;rDel='';
+  $('e_code').value=r.code||'';$('e_name').value=r.name||'';$('e_qty').value=r.qty||'';$('e_note').value=r.note||'';
+  $('e_err').hidden=true;$('rDlg').showModal();
+}
+$('e_cancel').onclick=()=>$('rDlg').close();
+$('rEditForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const report={code:$('e_code').value.trim(),name:$('e_name').value.trim(),qty:$('e_qty').value.trim(),note:$('e_note').value.trim()};
+  if(!report.code&&!report.name){$('e_err').textContent='料號和品項至少要填一個。';$('e_err').hidden=false;return}
+  $('e_save').disabled=true;
+  const ok=await rCall({action:'reportSave',id:rEditing.id,report},'已更新回報');
+  $('e_save').disabled=false;
+  if(ok)$('rDlg').close();else{$('e_err').textContent='儲存失敗，請稍後再試一次。';$('e_err').hidden=false}
+});
 
 $('vbList').onclick=()=>setView('list');
 $('vbRep').onclick=()=>setView('reports');

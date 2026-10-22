@@ -72,7 +72,7 @@ button{cursor:pointer}
 .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted);margin-top:2px}
 .meta .brand{color:var(--accent);font-weight:500}
 .meta .prev{color:var(--restock);font-weight:500}
-.tabs.rtabs{grid-template-columns:repeat(7,minmax(0,1fr))}
+.tabs.rtabs{grid-template-columns:repeat(4,minmax(0,1fr))}
 .rtabs .tab[data-f="sold"] .n{color:var(--sold)} .rtabs .tab[data-f="hold"] .n{color:var(--hold)}
 .rtabs .tab[data-f="pending"] .n{color:var(--accent)} .rtabs .tab[data-f="done"] .n{color:var(--ok)} .rtabs .tab[data-f="down"] .n{color:var(--ink)} .rtabs .tab[data-f="restock"] .n{color:var(--restock)}
 .pills{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
@@ -116,8 +116,7 @@ section{display:flex;flex-direction:column;gap:16px}
 
 @media (max-width:640px){
   .rform{grid-template-columns:1fr 1fr}
-  .tabs.rtabs{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .rtabs .tab .s{display:none}
+  .tabs.rtabs{grid-template-columns:repeat(2,minmax(0,1fr))}
   .row.rrow{grid-template-columns:minmax(0,1fr)}
   .row.rrow .acts{justify-content:flex-start}
   .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -463,10 +462,7 @@ function parseBulk(text){
 const RTABS=[
   ['pending','待處理','還沒按處理結果',r=>!r.result],
   ['done','已補貨','已補貨結案',r=>r.result==='done'],
-  ['sold','售完不補','還在賣，未下架',r=>r.result==='sold'&&!r.delisted],
   ['down','已下架','確認售完已下架',r=>!!r.delisted||r.result==='delist'],
-  ['restock','未來會補貨','暫時缺貨',r=>r.result==='restock'],
-  ['hold','改版／暫不生產','等待改版或排程',r=>r.result==='hold'],
   ['all','全部','所有回報',r=>true]];
 function renderRTabs(){
   const box=$('r_tabs');box.textContent='';

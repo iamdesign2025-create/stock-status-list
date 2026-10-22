@@ -72,8 +72,9 @@ button{cursor:pointer}
 .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted);margin-top:2px}
 .meta .brand{color:var(--accent);font-weight:500}
 .meta .prev{color:var(--restock);font-weight:500}
-.tabs.rtabs{grid-template-columns:repeat(5,minmax(0,1fr))}
-.rtabs .tab[data-f="pending"] .n{color:var(--accent)} .rtabs .tab[data-f="done"] .n{color:var(--ok)} .rtabs .tab[data-f="down"] .n{color:var(--sold)} .rtabs .tab[data-f="restock"] .n{color:var(--restock)}
+.tabs.rtabs{grid-template-columns:repeat(7,minmax(0,1fr))}
+.rtabs .tab[data-f="sold"] .n{color:var(--sold)} .rtabs .tab[data-f="hold"] .n{color:var(--hold)}
+.rtabs .tab[data-f="pending"] .n{color:var(--accent)} .rtabs .tab[data-f="done"] .n{color:var(--ok)} .rtabs .tab[data-f="down"] .n{color:var(--ink)} .rtabs .tab[data-f="restock"] .n{color:var(--restock)}
 .pills{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
 .pill{font-size:12px;font-weight:500;border-radius:999px;padding:2px 10px;white-space:nowrap}
 .pill.sold{background:var(--sold-bg);color:var(--sold)} .pill.restock{background:var(--restock-bg);color:var(--restock)} .pill.hold{background:var(--hold-bg);color:var(--hold)}
@@ -116,6 +117,7 @@ section{display:flex;flex-direction:column;gap:16px}
 @media (max-width:640px){
   .rform{grid-template-columns:1fr 1fr}
   .tabs.rtabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .rtabs .tab .s{display:none}
   .row.rrow{grid-template-columns:minmax(0,1fr)}
   .row.rrow .acts{justify-content:flex-start}
   .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -176,7 +178,7 @@ section{display:flex;flex-direction:column;gap:16px}
       <input id="r_date" type="date" aria-label="用日期查找" title="用日期查找（回報日或處理日）">
       <button type="button" class="btn ghost" id="r_dateClr" hidden>清除日期</button>
       <select id="r_filter" aria-label="處理狀態">
-        <option value="pending">待處理</option><option value="done">已補貨</option><option value="down">已下架（售完不補／改版）</option><option value="restock">未來會補貨</option><option value="resolved">已處理（全部）</option><option value="all">全部</option>
+        <option value="pending">待處理</option><option value="done">已補貨</option><option value="sold">售完不補（還在賣）</option><option value="down">已下架</option><option value="restock">未來會補貨</option><option value="hold">改版／暫不生產</option><option value="resolved">已處理（全部）</option><option value="all">全部</option>
       </select>
     </div>
     <div class="count" id="r_count"></div>
@@ -392,12 +394,14 @@ function renderReports(){
   const f=$('r_filter').value,q=$('r_q').value.trim().toLowerCase(),d=$('r_date').value.replace(/-/g,'/');
   $('r_dateClr').hidden=!d;
   const rows=reports.filter(r=>{
-    if(d&&r.date!==d&&r.doneDate!==d)return false;
+    if(d&&r.date!==d&&r.doneDate!==d&&r.delisted!==d)return false;
     if(f==='pending'&&r.result)return false;
     if(f==='resolved'&&!r.result)return false;
     if(f==='done'&&r.result!=='done')return false;
     if(f==='restock'&&r.result!=='restock')return false;
-    if(f==='down'&&!['sold','hold','delist'].includes(r.result))return false;
+    if(f==='down'&&!(r.delisted||r.result==='delist'))return false;
+    if(f==='sold'&&!(r.result==='sold'&&!r.delisted))return false;
+    if(f==='hold'&&r.result!=='hold')return false;
     if(q&&!((r.code||'')+' '+(r.name||'')+' '+(r.note||'')+' '+(r.date||'')).toLowerCase().includes(q))return false;
     return true;
   }).reverse();
@@ -419,6 +423,9 @@ function renderReports(){
     const a=el('div','acts');
     if(r.result&&rEdit!==r.id){
       a.append(el('span','pill '+r.result,RESULTS[r.result]||RESULT_OLD[r.result]||r.result));
+      if(r.delisted)a.append(el('span','pill delist','已下架 '+r.delisted.slice(5)));
+      if(r.result==='sold'){const dl=el('button',r.delisted?'edit':'act sold',r.delisted?'取消下架':'確認已下架');dl.type='button';dl.disabled=rBusy;
+        dl.onclick=()=>rCall({action:r.delisted?'undelist':'delist',id:r.id},r.delisted?'已取消下架標記':'已標記為已下架，清單也同步標記已下架');a.append(dl)}
       const ch=el('button','edit','變更');ch.type='button';ch.disabled=rBusy;ch.onclick=()=>{rEdit=r.id;renderReports()};a.append(ch);
     }else{
       for(const k in RESULTS){const b=el('button','act '+k,RESULTS[k]);b.type='button';b.disabled=rBusy;b.onclick=()=>resolveReport(r,k);a.append(b)}
@@ -456,14 +463,16 @@ function parseBulk(text){
 const RTABS=[
   ['pending','待處理','還沒按處理結果',r=>!r.result],
   ['done','已補貨','已補貨結案',r=>r.result==='done'],
-  ['down','已下架','售完不補／改版',r=>['sold','hold','delist'].includes(r.result)],
+  ['sold','售完不補','還在賣，未下架',r=>r.result==='sold'&&!r.delisted],
+  ['down','已下架','確認售完已下架',r=>!!r.delisted||r.result==='delist'],
   ['restock','未來會補貨','暫時缺貨',r=>r.result==='restock'],
+  ['hold','改版／暫不生產','等待改版或排程',r=>r.result==='hold'],
   ['all','全部','所有回報',r=>true]];
 function renderRTabs(){
   const box=$('r_tabs');box.textContent='';
   const f=$('r_filter').value,d=$('r_date').value.replace(/-/g,'/');
   for(const [k,l,s,fn] of RTABS){
-    const n=reports.filter(r=>fn(r)&&(!d||r.date===d||r.doneDate===d)).length;
+    const n=reports.filter(r=>fn(r)&&(!d||r.date===d||r.doneDate===d||r.delisted===d)).length;
     const b=el('button','tab');b.type='button';b.dataset.f=k;b.setAttribute('aria-pressed',String(f===k));
     b.append(el('span','n',loaded?String(n):'–'),el('span','l',l),el('span','s',d?d:s));
     b.onclick=()=>{$('r_filter').value=k;renderReports()};

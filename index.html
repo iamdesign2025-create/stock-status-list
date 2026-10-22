@@ -72,6 +72,8 @@ button{cursor:pointer}
 .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--muted);margin-top:2px}
 .meta .brand{color:var(--accent);font-weight:500}
 .meta .prev{color:var(--restock);font-weight:500}
+.tabs.rtabs{grid-template-columns:repeat(5,minmax(0,1fr))}
+.rtabs .tab[data-f="pending"] .n{color:var(--accent)} .rtabs .tab[data-f="done"] .n{color:var(--ok)} .rtabs .tab[data-f="down"] .n{color:var(--sold)} .rtabs .tab[data-f="restock"] .n{color:var(--restock)}
 .pills{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
 .pill{font-size:12px;font-weight:500;border-radius:999px;padding:2px 10px;white-space:nowrap}
 .pill.sold{background:var(--sold-bg);color:var(--sold)} .pill.restock{background:var(--restock-bg);color:var(--restock)} .pill.hold{background:var(--hold-bg);color:var(--hold)}
@@ -113,6 +115,7 @@ section{display:flex;flex-direction:column;gap:16px}
 
 @media (max-width:640px){
   .rform{grid-template-columns:1fr 1fr}
+  .tabs.rtabs{grid-template-columns:repeat(3,minmax(0,1fr))}
   .row.rrow{grid-template-columns:minmax(0,1fr)}
   .row.rrow .acts{justify-content:flex-start}
   .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -155,6 +158,7 @@ section{display:flex;flex-direction:column;gap:16px}
   </section>
 
   <section id="vRep" hidden>
+    <div class="tabs rtabs" id="r_tabs"></div>
     <form id="rForm" class="rform">
       <input id="r_code" placeholder="料號" aria-label="料號" autocomplete="off">
       <input id="r_name" placeholder="品項" aria-label="品項" autocomplete="off">
@@ -382,6 +386,7 @@ function renderView(){
 function renderReports(){
   const pend=reports.filter(r=>!r.result).length;
   $('pend').textContent=String(pend);$('pend').hidden=!pend;
+  renderRTabs();
   const box=$('r_list');box.textContent='';
   if(!loaded){box.append(el('div','empty',failed||'正在載入回報…'));$('r_count').textContent='';return}
   const f=$('r_filter').value,q=$('r_q').value.trim().toLowerCase(),d=$('r_date').value.replace(/-/g,'/');
@@ -448,6 +453,23 @@ function parseBulk(text){
   }).filter(r=>r.code||r.name).map(fillName);
 }
 
+const RTABS=[
+  ['pending','待處理','還沒按處理結果',r=>!r.result],
+  ['done','已補貨','已補貨結案',r=>r.result==='done'],
+  ['down','已下架','售完不補／改版',r=>['sold','hold','delist'].includes(r.result)],
+  ['restock','未來會補貨','暫時缺貨',r=>r.result==='restock'],
+  ['all','全部','所有回報',r=>true]];
+function renderRTabs(){
+  const box=$('r_tabs');box.textContent='';
+  const f=$('r_filter').value,d=$('r_date').value.replace(/-/g,'/');
+  for(const [k,l,s,fn] of RTABS){
+    const n=reports.filter(r=>fn(r)&&(!d||r.date===d||r.doneDate===d)).length;
+    const b=el('button','tab');b.type='button';b.dataset.f=k;b.setAttribute('aria-pressed',String(f===k));
+    b.append(el('span','n',loaded?String(n):'–'),el('span','l',l),el('span','s',d?d:s));
+    b.onclick=()=>{$('r_filter').value=k;renderReports()};
+    box.append(b);
+  }
+}
 let rEditing=null;
 function openReportEdit(r){
   rEditing=r;rDel='';

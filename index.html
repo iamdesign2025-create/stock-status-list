@@ -313,6 +313,7 @@ function render(){
     const p=el('div','pills');
     if(tab==='all')p.append(el('span','pill '+i.cat,CATS[i.cat].label));
     if(i.ec)p.append(el('span','pill '+(i.ec==='已下架'?'off':'on'),i.ec));
+    if(i.cat==='sold'){const off=i.ec==='已下架';const dl=el('button',off?'edit':'act sold',off?'取消下架':'確認已下架');dl.type='button';dl.onclick=()=>quickEc(i,off?'':'已下架',dl);p.append(dl)}
     const e=el('button','edit','編輯');e.type='button';e.onclick=()=>openForm(i);
     r.append(c,n,p,e);
     frag.append(r);
@@ -320,6 +321,12 @@ function render(){
   list.append(frag);
 }
 
+async function quickEc(i,ec,btn){
+  btn.disabled=true;
+  const item={id:i.id,cat:i.cat,code:i.code,name:i.name,brand:i.brand,ec,date:i.date,eta:i.eta,note:i.note,order:i.order};
+  try{apply(await api({action:'save',item}));toast(ec?'已標記為已下架':'已取消下架標記')}
+  catch(e){toast('儲存失敗，請稍後再試一次。');btn.disabled=false}
+}
 function copy(text){
   const done=()=>toast('已複製 '+text);
   try{navigator.clipboard.writeText(text).then(done,()=>toast('無法複製，請手動選取：'+text))}catch(e){toast('無法複製，請手動選取：'+text)}
